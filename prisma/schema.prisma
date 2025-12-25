@@ -6,9 +6,157 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserType {
+  BROKER
+  OWNER
+  PUBLIC
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  number       String?  @unique
+  profileImage String?
+  longitude    Float?
+  latitude     Float?
+  userType     UserType @default(PUBLIC)
+  properties   Property[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum PriceUnit {
+  THOUSANDS
+  LAKHS
+  CRORES
+}
+
+enum PropertyType {
+  FLAT
+  COMERCIAL
+  HOUSE
+  LAND
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  SOLD
+  RENTED
+}
+
+enum PropertyUnit {
+  SQUARE_FEET
+  SQUARE_YARDS
+  ACRES
+  BIGHAS
+}
+
+model Property {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  address     String
+  price       Float
+  priceUnit   PriceUnit      @default(LAKHS)
+  type        PropertyType   @default(FLAT)
+  saleOrRent  String         @default("SALE")
+  area        Float
+  areaUnit    PropertyUnit   @default(SQUARE_FEET)
+  status      PropertyStatus @default(AVAILABLE)
+  images      String[]
+  longitude   Float
+  latitude    Float
+  sprawl_Data Sprawl_Data?      @relation(fields: [sprawlDataId], references: [id])
+  sprawlDataId String?
+  owner       User           @relation(fields: [ownerId], references: [id])
+  ownerId     String
+  rainfall_Data Rainfall_Data?    @relation(fields: [rainfallDataId], references: [id])
+  rainfallDataId String?
+  temperature_Data Temperature_Data? @relation(fields: [temperatureDataId], references: [id])
+  temperatureDataId String?
+  pollution_Data Pollution_Data?   @relation(fields: [pollutionDataId], references: [id])
+  pollutionDataId String?
+  population_Data Population_Data?   @relation(fields: [populationDataId], references: [id])
+  populationDataId String?
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+
+
+
+
+model Sprawl_Data {
+  id    String @id @default(uuid())
+  year  Int?
+  month Int?
+  sprawl_index Float?
+  properties   Property[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+
+
+
+model Rainfall_Data {
+  id    String @id @default(uuid())
+  year  Int?
+  month Int?
+  rainfall_amount Float?
+  properties   Property[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+
+
+
+model Temperature_Data {
+  id    String @id @default(uuid())
+  year  Int?
+  month Int?
+  average_temperature Float?
+  properties   Property[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+
+
+
+
+model Pollution_Data {
+  id    String @id @default(uuid())
+  year  Int?
+  month Int?
+  aqi_index Float?
+  properties   Property[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+
+
+
+model Population_Data {
+  id    String @id @default(uuid())
+  year  Int?
+  population_count Int?
+  properties   Property[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
