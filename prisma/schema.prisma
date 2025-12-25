@@ -1,55 +1,48 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// prisma/schema.prisma
+// BhumiIQ – Supabase + Prisma v5+ + PostGIS Compatible Schema
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
+// ============================================
+// ENUMS
+// ============================================
+
 enum UserType {
   BROKER
   OWNER
   PUBLIC
-}
 
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  number       String?  @unique
-  profileImage String?
-  longitude    Float?
-  latitude     Float?
-  userType     UserType @default(PUBLIC)
-  properties   Property[]
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  @@map("user_type")
 }
 
 enum PriceUnit {
   THOUSANDS
   LAKHS
   CRORES
+
+  @@map("price_unit")
 }
 
 enum PropertyType {
   FLAT
-  COMERCIAL
+  COMMERCIAL
   HOUSE
   LAND
+
+  @@map("property_type")
 }
 
 enum PropertyStatus {
   AVAILABLE
   SOLD
-  RENTED
+
+  @@map("property_status")
 }
 
 enum PropertyUnit {
@@ -57,106 +50,205 @@ enum PropertyUnit {
   SQUARE_YARDS
   ACRES
   BIGHAS
+
+  @@map("property_unit")
+}
+
+enum PriceOpinion {
+  OVERPRICED
+  FAIRLY_PRICED
+  UNDERPRICED
+
+  @@map("price_opinion")
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  name          String
+  number        String?  @unique
+  profileImage  String?  @map("profile_image")
+
+  longitude     Float?
+  latitude      Float?
+  location      Unsupported("geography(Point, 4326)")?
+
+  userType      UserType @default(PUBLIC) @map("user_type")
+  walletAddress String?  @unique @map("wallet_address")
+
+  alertEnabled  Boolean  @default(false) @map("alert_enabled")
+  alertRadius   Float    @default(2.0) @map("alert_radius") // km
+
+  properties    Property[]
+  reviews       CommunityReview[]
+
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([location], type: Gist)
+  @@index([email])
+  @@index([userType])
+  @@map("users")
 }
 
 model Property {
-  id          String         @id @default(uuid())
-  title       String
-  description String
-  address     String
-  price       Float
-  priceUnit   PriceUnit      @default(LAKHS)
-  type        PropertyType   @default(FLAT)
-  saleOrRent  String         @default("SALE")
-  area        Float
-  areaUnit    PropertyUnit   @default(SQUARE_FEET)
-  status      PropertyStatus @default(AVAILABLE)
-  images      String[]
-  longitude   Float
-  latitude    Float
-  sprawl_Data Sprawl_Data?      @relation(fields: [sprawlDataId], references: [id])
-  sprawlDataId String?
-  owner       User           @relation(fields: [ownerId], references: [id])
-  ownerId     String
-  rainfall_Data Rainfall_Data?    @relation(fields: [rainfallDataId], references: [id])
-  rainfallDataId String?
-  temperature_Data Temperature_Data? @relation(fields: [temperatureDataId], references: [id])
-  temperatureDataId String?
-  pollution_Data Pollution_Data?   @relation(fields: [pollutionDataId], references: [id])
-  pollutionDataId String?
-  population_Data Population_Data?   @relation(fields: [populationDataId], references: [id])
-  populationDataId String?
+  id                       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title                    String
+  description              String         @db.Text
+  address                  String
 
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  price                    Float          @db.DoublePrecision
+  priceUnit                PriceUnit      @default(LAKHS) @map("price_unit")
+
+  type                     PropertyType   @default(FLAT)
+  area                     Float          @db.DoublePrecision
+  areaUnit                 PropertyUnit   @default(SQUARE_FEET) @map("area_unit")
+  status                   PropertyStatus @default(AVAILABLE)
+
+  roadDensityRating        Float?         @map("road_density_rating")
+  drainageSystemRating     Float?         @map("drainage_system_rating")
+
+  longitude                Float          @db.DoublePrecision
+  latitude                 Float          @db.DoublePrecision
+  location                 Unsupported("geography(Point, 4326)")?
+
+  images                   String[]       @default([])
+
+  predictedPrice           Float?         @map("predicted_price")
+  predictedPriceConfidence Float?         @map("predicted_price_confidence")
+
+  owner                    User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId                  String         @map("owner_id") @db.Uuid
+
+  sprawlData               Sprawl_Data[]
+  rainfallData             Rainfall_Data[]
+  temperatureData          Temperature_Data[]
+  pollutionData            Pollution_Data[]
+  populationData           Population_Data[]
+
+  communityReviews         CommunityReview[]
+
+  createdAt                DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([location], type: Gist)
+  @@index([ownerId])
+  @@index([type])
+  @@index([status])
+  @@index([price])
+  @@index([createdAt(sort: Desc)])
+  @@map("properties")
 }
 
+// ============================================
+// COMMUNITY REVIEWS
+// ============================================
 
+model CommunityReview {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId      String        @map("property_id") @db.Uuid
 
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String        @map("user_id") @db.Uuid
+
+  priceOpinion    PriceOpinion  @map("price_opinion")
+  suggestedPrice  Float?        @map("suggested_price")
+  blockchainHash  String        @unique @map("blockchain_hash")
+
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([propertyId, userId])
+  @@index([propertyId])
+  @@index([userId])
+  @@map("community_reviews")
+}
+
+// ============================================
+// GEE TIME-SERIES DATA (1 Property → Many Records)
+// ============================================
 
 model Sprawl_Data {
-  id    String @id @default(uuid())
-  year  Int?
-  month Int?
-  sprawl_index Float?
-  properties   Property[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year        Int
+  month       Int?
+  sprawlIndex Float?  @map("sprawl_index")
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId  String   @map("property_id") @db.Uuid
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([propertyId, year])
+  @@map("sprawl_data")
 }
-
-
-
-
 
 model Rainfall_Data {
-  id    String @id @default(uuid())
-  year  Int?
-  month Int?
-  rainfall_amount Float?
-  properties   Property[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year            Int
+  month           Int?
+  rainfallAmount  Float?  @map("rainfall_amount")
+
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId      String   @map("property_id") @db.Uuid
+
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([propertyId, year])
+  @@map("rainfall_data")
 }
-
-
-
-
 
 model Temperature_Data {
-  id    String @id @default(uuid())
-  year  Int?
-  month Int?
-  average_temperature Float?
-  properties   Property[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year                Int
+  month               Int?
+  averageTemperature  Float?  @map("average_temperature")
+
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId          String   @map("property_id") @db.Uuid
+
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([propertyId, year])
+  @@map("temperature_data")
 }
-
-
-
-
-
 
 model Pollution_Data {
-  id    String @id @default(uuid())
-  year  Int?
-  month Int?
-  aqi_index Float?
-  properties   Property[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year        Int
+  month       Int?
+  aqiIndex    Float?  @map("aqi_index")
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId  String   @map("property_id") @db.Uuid
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([propertyId, year])
+  @@map("pollution_data")
 }
 
-
-
-
-
 model Population_Data {
-  id    String @id @default(uuid())
-  year  Int?
-  population_count Int?
-  properties   Property[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year              Int
+  populationCount   Int?     @map("population_count")
+
+  property          Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId        String   @map("property_id") @db.Uuid
+
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([propertyId, year])
+  @@map("population_data")
 }
